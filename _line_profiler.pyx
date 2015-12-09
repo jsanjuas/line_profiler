@@ -36,6 +36,8 @@ cdef extern from "Python.h":
 cdef extern from "timers.h":
     PY_LONG_LONG hpTimer()
     double hpTimerUnit()
+    PY_LONG_LONG cpuTimer()
+    double cpuTimerUnit()
 
 cdef extern from "unset_trace.h":
     void unset_trace()
@@ -100,21 +102,38 @@ class LineStats(object):
         self.timings = timings
         self.unit = unit
 
+cdef public enum:
+    PROFILE_REAL_TIME
+    PROFILE_CPU_TIME
+
+ctypedef PY_LONG_LONG (*timerFn)()
+
+class BadTimerException(Exception):
+    pass
 
 cdef class LineProfiler:
     """ Time the execution of lines of Python code.
     """
+
     cdef public list functions
     cdef public dict code_map
     cdef public dict last_time
     cdef public double timer_unit
+    cdef timerFn timer_fn
     cdef public long enable_count
 
-    def __init__(self, *functions):
+    def __init__(self, *functions, profiler=PROFILE_REAL_TIME):
         self.functions = []
         self.code_map = {}
         self.last_time = {}
-        self.timer_unit = hpTimerUnit()
+        if profiler == PROFILE_REAL_TIME:
+            self.timer_unit = hpTimerUnit()
+            self.timer_fn = hpTimer
+        elif profiler == PROFILE_CPU_TIME:
+            self.timer_unit = cpuTimerUnit()
+            self.timer_fn = cpuTimer
+        else:
+            raise BadTimerException("bad timer")
         self.enable_count = 0
         for func in functions:
             self.add_function(func)
@@ -201,7 +220,7 @@ cdef int python_trace_callback(object self_, PyFrameObject *py_frame, int what,
     if what == PyTrace_LINE or what == PyTrace_RETURN:
         code = <object>py_frame.f_code
         if code in self.code_map:
-            time = hpTimer()
+            time = self.timer_fn()
             if code in last_time:
                 old = last_time[code]
                 line_entries = self.code_map[code]
@@ -215,7 +234,7 @@ cdef int python_trace_callback(object self_, PyFrameObject *py_frame, int what,
             if what == PyTrace_LINE:
                 # Get the time again. This way, we don't record much time wasted
                 # in this function.
-                last_time[code] = LastTime(py_frame.f_lineno, hpTimer())
+                last_time[code] = LastTime(py_frame.f_lineno, self.timer_fn())
             else:
                 # We are returning from a function, not executing a line. Delete
                 # the last_time record. It may have already been deleted if we
@@ -224,5 +243,3 @@ cdef int python_trace_callback(object self_, PyFrameObject *py_frame, int what,
                     del last_time[code]
 
     return 0
-
-

@@ -17,7 +17,8 @@ import optparse
 import os
 import sys
 
-from _line_profiler import LineProfiler as CLineProfiler
+from _line_profiler import LineProfiler as CLineProfiler, PROFILE_REAL_TIME, \
+    PROFILE_CPU_TIME, BadTimerException
 
 # Python 2/3 compatibility utils
 # ===========================================================

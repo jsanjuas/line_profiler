@@ -64,5 +64,16 @@ hpTimerUnit(void)
         return 0.000001;
 }
 
-#endif  /* MS_WINDOWS */
+PY_LONG_LONG
+cpuTimer(void)
+{
+        return clock();
+}
 
+double
+cpuTimerUnit(void)
+{
+        return 1.0 / CLOCKS_PER_SEC;
+}
+
+#endif  /* MS_WINDOWS */
